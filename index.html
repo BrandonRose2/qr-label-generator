@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Label Sheet Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F6F4EE;
+    --panel: #FFFFFF;
+    --ink: #1B1A16;
+    --ink-soft: #6B6659;
+    --line: #DEDACB;
+    --accent: #E1531F;
+    --accent-ink: #FFFFFF;
+    --ok: #3A7D5C;
+    --cell-empty: #F0EEE4;
+    --shadow: rgba(27, 26, 22, 0.08);
+  }
+
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #17160F;
+      --panel: #211F17;
+      --ink: #F1EEE2;
+      --ink-soft: #A9A28C;
+      --line: #3B3826;
+      --accent: #FF6A34;
+      --accent-ink: #17160F;
+      --cell-empty: #292616;
+      --shadow: rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #17160F;
+    --panel: #211F17;
+    --ink: #F1EEE2;
+    --ink-soft: #A9A28C;
+    --line: #3B3826;
+    --accent: #FF6A34;
+    --accent-ink: #17160F;
+    --cell-empty: #292616;
+    --shadow: rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Space Grotesk", "Segoe UI", Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+  }
+
+  .mono {
+    font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 36px 24px 64px;
+  }
+
+  header.page-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 3px solid var(--ink);
+    padding-bottom: 18px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
+  header.page-head h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  header.page-head p {
+    margin: 6px 0 0;
+    color: var(--ink-soft);
+    font-size: 14px;
+    max-width: 46ch;
+  }
+
+  .sheet-spec {
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align: right;
+  }
+  .sheet-spec strong { color: var(--ink); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    box-shadow: 0 1px 0 var(--shadow);
+  }
+
+  .panel + .panel { margin-top: 20px; }
+
+  .panel-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-head h2 {
+    font-size: 13px;
+    text-transform: none;
+    margin: 0;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  .panel-body { padding: 18px; }
+
+  .dropzone {
+    border: 2px dashed var(--line);
+    border-radius: 4px;
+    padding: 30px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    background: var(--paper);
+  }
+
+  .dropzone.drag-over {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--paper));
+  }
+
+  .dropzone .glyph {
+    font-size: 26px;
+    display: block;
+    margin-bottom: 10px;
+  }
+
+  .dropzone p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .dropzone span {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  input[type="file"] { display: none; }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .field-row label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .field-row .hint {
+    display: block;
+    font-size: 11px;
+    color: var(--ink-soft);
+    font-weight: 400;
+    margin-top: 2px;
+  }
+
+  input[type="text"], select {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--panel);
+    color: var(--ink);
+    width: 140px;
+  }
+
+  input[type="text"]:focus, select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .item-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  .item-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    cursor: grab;
+  }
+
+  .item-list li:last-child { border-bottom: none; }
+  .item-list li.dragging { opacity: 0.4; }
+
+  .item-thumb {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: white;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+  }
+
+  .item-fields {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .item-fields input {
+    width: 100%;
+  }
+
+  .item-fields .filename {
+    font-size: 10px;
+    color: var(--ink-soft);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .remove-btn {
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 6px;
+  }
+  .remove-btn:hover { color: var(--accent); }
+
+  .empty-note {
+    font-size: 13px;
+    color: var(--ink-soft);
+    padding: 10px 2px;
+  }
+
+  button.btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 9px 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: transform 0.08s ease;
+  }
+  button.btn:active { transform: translateY(1px); }
+  button.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  button.btn.secondary {
+    background: transparent;
+    color: var(--ink);
+  }
+
+  button.btn.accent {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .sheets {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .sheet-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 16px;
+  }
+
+  .sheet-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .sheet-card-head h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .sheet-canvas-wrap {
+    display: flex;
+    justify-content: center;
+    background: var(--cell-empty);
+    padding: 14px;
+    border-radius: 3px;
+    overflow: auto;
+  }
+
+  canvas.sheet-canvas {
+    width: 100%;
+    max-width: 320px;
+    height: auto;
+    background: white;
+    box-shadow: 0 2px 10px var(--shadow);
+    border-radius: 2px;
+  }
+
+  .placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 240px;
+    color: var(--ink-soft);
+    font-size: 14px;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 10px 18px;
+    border-radius: 4px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 50;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <div>
+      <h1>Label Sheet Maker</h1>
+      <p>Drop QR label PNGs, name each unit, and lay them out on a 4×6 print sheet.</p>
+    </div>
+    <div class="sheet-spec">
+      Sheet size <strong>4 × 6 in</strong><br>
+      <span id="capacity-note">300 dpi &middot; 1200 × 1800 px</span>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <div class="col-left">
+      <div class="panel">
+        <div class="panel-head"><h2>Add QR images</h2></div>
+        <div class="panel-body">
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop PNG files here or click to browse">
+            <span class="glyph">&#128274;</span>
+            <p>Drag &amp; drop PNG files here</p>
+            <span>or click to browse</span>
+          </div>
+          <input type="file" id="file-input" accept="image/png,image/*" multiple>
+
+          <div class="field-row">
+            <div>
+              <label for="property-code">Header text</label>
+              <span class="hint">Printed above each QR</span>
+            </div>
+            <input type="text" id="property-code" value="NWA" maxlength="16">
+          </div>
+
+          <div class="field-row">
+            <div>
+              <label for="grid-rows">Grid rows</label>
+              <span class="hint">Columns fixed at 3</span>
+            </div>
+            <select id="grid-rows">
+              <option value="2">3 × 2 (6 per sheet)</option>
+              <option value="3" selected>3 × 3 (9 per sheet)</option>
+              <option value="4">3 × 4 (12 per sheet)</option>
+              <option value="5">3 × 5 (15 per sheet)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Units (<span id="item-count">0</span>)</h2>
+          <button class="btn secondary" id="clear-all" style="padding:4px 10px;font-size:12px;">Clear all</button>
+        </div>
+        <div class="panel-body">
+          <ul class="item-list" id="item-list"></ul>
+          <p class="empty-note" id="empty-note">No files yet — drop PNGs above to get started.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-right">
+      <div class="toolbar">
+        <button class="btn accent" id="generate-btn" disabled>Generate sheets</button>
+        <button class="btn secondary" id="download-all-btn" disabled>Download all</button>
+      </div>
+
+      <div class="sheets" id="sheets-output" style="margin-top:18px;">
+        <div class="sheet-card">
+          <div class="placeholder">Add QR images and click Generate to preview the sheet here.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  const DPI = 300;
+  const SHEET_W = 4 * DPI;
+  const SHEET_H = 6 * DPI;
+  const COLS = 3;
+
+  /** @type {{id:number, dataUrl:string, img:HTMLImageElement, unit:string, filename:string}[]} */
+  let items = [];
+  let idSeq = 1;
+  let downloadsCap = null;
+  let sheetsData = []; // {canvas, filename}
+
+  const dropzone = document.getElementById("dropzone");
+  const fileInput = document.getElementById("file-input");
+  const itemList = document.getElementById("item-list");
+  const itemCount = document.getElementById("item-count");
+  const emptyNote = document.getElementById("empty-note");
+  const propertyCodeInput = document.getElementById("property-code");
+  const gridRowsSelect = document.getElementById("grid-rows");
+  const generateBtn = document.getElementById("generate-btn");
+  const downloadAllBtn = document.getElementById("download-all-btn");
+  const sheetsOutput = document.getElementById("sheets-output");
+  const capacityNote = document.getElementById("capacity-note");
+  const clearAllBtn = document.getElementById("clear-all");
+  const toastEl = document.getElementById("toast");
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastEl._t);
+    toastEl._t = setTimeout(() => toastEl.classList.remove("show"), 2400);
+  }
+
+  function unitFromFilename(name) {
+    const base = name.replace(/\.[^/.]+$/, "");
+    const parts = base.split(/[_\-\s]+/).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : base;
+  }
+
+  function capacity() {
+    return COLS * parseInt(gridRowsSelect.value, 10);
+  }
+
+  function updateCapacityNote() {
+    capacityNote.textContent = `300 dpi · 1200 × 1800 px · ${capacity()} per sheet`;
+  }
+
+  function renderList() {
+    itemList.innerHTML = "";
+    itemCount.textContent = items.length;
+    emptyNote.style.display = items.length ? "none" : "block";
+    generateBtn.disabled = items.length === 0;
+
+    items.forEach((item, idx) => {
+      const li = document.createElement("li");
+      li.draggable = true;
+      li.dataset.id = item.id;
+
+      const thumb = document.createElement("img");
+      thumb.className = "item-thumb";
+      thumb.src = item.dataUrl;
+      thumb.alt = "";
+
+      const fields = document.createElement("div");
+      fields.className = "item-fields";
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = item.unit;
+      input.placeholder = "Unit name / number";
+      input.addEventListener("input", () => { item.unit = input.value; });
+
+      const fname = document.createElement("div");
+      fname.className = "filename";
+      fname.textContent = item.filename;
+
+      fields.appendChild(input);
+      fields.appendChild(fname);
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "remove-btn";
+      removeBtn.innerHTML = "&times;";
+      removeBtn.title = "Remove";
+      removeBtn.addEventListener("click", () => {
+        items = items.filter(it => it.id !== item.id);
+        renderList();
+      });
+
+      li.appendChild(thumb);
+      li.appendChild(fields);
+      li.appendChild(removeBtn);
+
+      li.addEventListener("dragstart", () => li.classList.add("dragging"));
+      li.addEventListener("dragend", () => li.classList.remove("dragging"));
+      li.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        const dragging = itemList.querySelector(".dragging");
+        if (!dragging || dragging === li) return;
+        const rect = li.getBoundingClientRect();
+        const before = (e.clientY - rect.top) < rect.height / 2;
+        itemList.insertBefore(dragging, before ? li : li.nextSibling);
+      });
+      li.addEventListener("drop", () => {
+        const newOrder = [...itemList.children].map(el => parseInt(el.dataset.id, 10));
+        items.sort((a, b) => newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+      });
+
+      itemList.appendChild(li);
+    });
+  }
+
+  function addFiles(fileList) {
+    const files = [...fileList].filter(f => f.type.startsWith("image/"));
+    if (!files.length) {
+      toast("Drop PNG or other image files.");
+      return;
+    }
+    let pending = files.length;
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const img = new Image();
+        img.onload = () => {
+          items.push({
+            id: idSeq++,
+            dataUrl,
+            img,
+            unit: unitFromFilename(file.name),
+            filename: file.name
+          });
+          renderList();
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
+  });
+  fileInput.addEventListener("change", (e) => addFiles(e.target.files));
+
+  ["dragenter", "dragover"].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropzone.classList.add("drag-over");
+    });
+  });
+  ["dragleave", "drop"].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("drag-over");
+    });
+  });
+  dropzone.addEventListener("drop", (e) => {
+    if (e.dataTransfer.files && e.dataTransfer.files.length) {
+      addFiles(e.dataTransfer.files);
+    }
+  });
+
+  clearAllBtn.addEventListener("click", () => {
+    items = [];
+    renderList();
+  });
+
+  gridRowsSelect.addEventListener("change", updateCapacityNote);
+  updateCapacityNote();
+
+  function chunk(arr, size) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  }
+
+  async function ensureFonts() {
+    try {
+      await Promise.all([
+        document.fonts.load('600 40px "Space Grotesk"'),
+        document.fonts.load('700 40px "JetBrains Mono"'),
+        document.fonts.load('400 40px "JetBrains Mono"')
+      ]);
+      await document.fonts.ready;
+    } catch (e) { /* fall back to system fonts silently */ }
+  }
+
+  function drawSheet(sheetItems, rows, headerText) {
+    const canvas = document.createElement("canvas");
+    canvas.width = SHEET_W;
+    canvas.height = SHEET_H;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, SHEET_W, SHEET_H);
+    ctx.imageSmoothingEnabled = false;
+
+    const cellW = SHEET_W / COLS;
+    const cellH = SHEET_H / rows;
+
+    ctx.strokeStyle = "#dcdcdc";
+    ctx.lineWidth = 2;
+    for (let c = 1; c < COLS; c++) {
+      const x = c * cellW;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, SHEET_H); ctx.stroke();
+    }
+    for (let r = 1; r < rows; r++) {
+      const y = r * cellH;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(SHEET_W, y); ctx.stroke();
+    }
+
+    const headerSize = Math.max(18, Math.round(cellH * 0.05));
+    const unitSize = Math.max(26, Math.round(cellH * 0.085));
+    const qrSize = Math.round(Math.min(cellW, cellH) * 0.62);
+
+    sheetItems.forEach((item, i) => {
+      const row = Math.floor(i / COLS);
+      const col = i % COLS;
+      const cx = col * cellW;
+      const cy = row * cellH;
+
+      const blockH = headerSize + 14 + qrSize + 16 + unitSize;
+      let y = cy + (cellH - blockH) / 2;
+
+      ctx.fillStyle = "#1B1A16";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+
+      if (headerText) {
+        ctx.font = `400 ${headerSize}px "JetBrains Mono", monospace`;
+        ctx.fillText(headerText, cx + cellW / 2, y);
+      }
+      y += headerSize + 14;
+
+      const qx = cx + (cellW - qrSize) / 2;
+      ctx.drawImage(item.img, qx, y, qrSize, qrSize);
+      y += qrSize + 16;
+
+      const unitLabel = (item.unit || "").trim();
+      if (unitLabel) {
+        ctx.font = `700 ${unitSize}px "Space Grotesk", sans-serif`;
+        ctx.fillText(unitLabel, cx + cellW / 2, y);
+      }
+    });
+
+    return canvas;
+  }
+
+  async function generateSheets() {
+    if (!items.length) return;
+    await ensureFonts();
+
+    const rows = parseInt(gridRowsSelect.value, 10);
+    const cap = COLS * rows;
+    const headerText = propertyCodeInput.value.trim();
+    const groups = chunk(items, cap);
+
+    sheetsOutput.innerHTML = "";
+    sheetsData = [];
+
+    groups.forEach((group, idx) => {
+      const canvas = drawSheet(group, rows, headerText);
+      const filename = `label-sheet-${String(idx + 1).padStart(2, "0")}.png`;
+      sheetsData.push({ canvas, filename });
+
+      const card = document.createElement("div");
+      card.className = "sheet-card";
+
+      const head = document.createElement("div");
+      head.className = "sheet-card-head";
+      const h3 = document.createElement("h3");
+      h3.textContent = `Sheet ${idx + 1} of ${groups.length} — ${group.length} label${group.length === 1 ? "" : "s"}`;
+      const dlBtn = document.createElement("button");
+      dlBtn.className = "btn secondary";
+      dlBtn.style.padding = "6px 12px";
+      dlBtn.style.fontSize = "12px";
+      dlBtn.textContent = "Download PNG";
+      dlBtn.addEventListener("click", () => downloadCanvas(canvas, filename));
+      head.appendChild(h3);
+      head.appendChild(dlBtn);
+
+      const canvasWrap = document.createElement("div");
+      canvasWrap.className = "sheet-canvas-wrap";
+      canvas.classList.add("sheet-canvas");
+      canvasWrap.appendChild(canvas);
+
+      card.appendChild(head);
+      card.appendChild(canvasWrap);
+      sheetsOutput.appendChild(card);
+    });
+
+    downloadAllBtn.disabled = sheetsData.length === 0;
+  }
+
+  function canvasToBlob(canvas) {
+    return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+  }
+
+  async function downloadCanvas(canvas, filename) {
+    const blob = await canvasToBlob(canvas);
+    if (downloadsCap) {
+      try {
+        await downloadsCap.save({ filename, data: blob });
+        toast(`Saved ${filename}`);
+        return;
+      } catch (err) {
+        if (err && err.code === "declined") return;
+        // fall through to browser fallback
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  async function downloadAll() {
+    for (const s of sheetsData) {
+      await downloadCanvas(s.canvas, s.filename);
+    }
+  }
+
+  generateBtn.addEventListener("click", generateSheets);
+  downloadAllBtn.addEventListener("click", downloadAll);
+
+  (async function initCapabilities() {
+    try {
+      if (window.claude && typeof window.claude.use === "function") {
+        downloadsCap = await window.claude.use("downloads");
+      }
+    } catch (e) { downloadsCap = null; }
+  })();
+
+})();
+</script>
+</body>
+</html>
