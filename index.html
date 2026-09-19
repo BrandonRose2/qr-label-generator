@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
     --paper: #F6F4EE;
@@ -406,12 +407,12 @@
       <div class="panel">
         <div class="panel-head"><h2>Add QR images</h2></div>
         <div class="panel-body">
-          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop PNG files here or click to browse">
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop PNG files or a ZIP of PNGs here, or click to browse">
             <span class="glyph">&#128274;</span>
-            <p>Drag &amp; drop PNG files here</p>
+            <p>Drag &amp; drop PNGs or a ZIP here</p>
             <span>or click to browse</span>
           </div>
-          <input type="file" id="file-input" accept="image/png,image/*" multiple>
+          <input type="file" id="file-input" accept="image/png,image/*,.zip,application/zip,application/x-zip-compressed" multiple>
 
           <div class="field-row">
             <div>
@@ -452,6 +453,7 @@
       <div class="toolbar">
         <button class="btn accent" id="generate-btn" disabled>Generate sheets</button>
         <button class="btn secondary" id="download-all-btn" disabled>Download all</button>
+        <button class="btn secondary" id="print-all-btn" disabled>Print all</button>
       </div>
 
       <div class="sheets" id="sheets-output" style="margin-top:18px;">
@@ -490,6 +492,7 @@
   const gridRowsSelect = document.getElementById("grid-rows");
   const generateBtn = document.getElementById("generate-btn");
   const downloadAllBtn = document.getElementById("download-all-btn");
+  const printAllBtn = document.getElementById("print-all-btn");
   const sheetsOutput = document.getElementById("sheets-output");
   const capacityNote = document.getElementById("capacity-note");
   const clearAllBtn = document.getElementById("clear-all");
@@ -580,14 +583,14 @@
     });
   }
 
-  function addFiles(fileList) {
-    const files = [...fileList].filter(f => f.type.startsWith("image/"));
-    if (!files.length) {
-      toast("Drop PNG or other image files.");
-      return;
-    }
-    let pending = files.length;
-    files.forEach(file => {
+  function isZipFile(file) {
+    return file.name.toLowerCase().endsWith(".zip") ||
+      file.type === "application/zip" ||
+      file.type === "application/x-zip-compressed";
+  }
+
+  function addImageFile(file) {
+    return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const dataUrl = e.target.result;
@@ -600,12 +603,66 @@
             unit: unitFromFilename(file.name),
             filename: file.name
           });
-          renderList();
+          resolve();
         };
+        img.onerror = () => resolve();
         img.src = dataUrl;
       };
+      reader.onerror = () => resolve();
       reader.readAsDataURL(file);
     });
+  }
+
+  async function addZipFile(file) {
+    if (typeof JSZip === "undefined") {
+      toast("ZIP support failed to load — try a normal image file.");
+      return;
+    }
+    let zip;
+    try {
+      zip = await JSZip.loadAsync(file);
+    } catch (e) {
+      toast(`Couldn't read ${file.name} as a ZIP.`);
+      return;
+    }
+    const entries = Object.values(zip.files).filter(entry => {
+      if (entry.dir) return false;
+      if (entry.name.startsWith("__MACOSX/")) return false;
+      const base = entry.name.split("/").pop();
+      if (base.startsWith(".")) return false;
+      return /\.(png|jpe?g|gif|webp|bmp)$/i.test(entry.name);
+    });
+    if (!entries.length) {
+      toast(`No image files found inside ${file.name}.`);
+      return;
+    }
+    for (const entry of entries) {
+      const blob = await entry.async("blob");
+      const name = entry.name.split("/").pop();
+      const imgFile = new File([blob], name, { type: blob.type || "image/png" });
+      await addImageFile(imgFile);
+    }
+  }
+
+  async function addFiles(fileList) {
+    const all = [...fileList];
+    const zips = all.filter(isZipFile);
+    const images = all.filter(f => !isZipFile(f) && f.type.startsWith("image/"));
+
+    if (!zips.length && !images.length) {
+      toast("Drop PNG/image files or a ZIP of them.");
+      return;
+    }
+
+    for (const file of images) {
+      await addImageFile(file);
+    }
+    renderList();
+
+    for (const zip of zips) {
+      await addZipFile(zip);
+      renderList();
+    }
   }
 
   dropzone.addEventListener("click", () => fileInput.click());
@@ -747,8 +804,22 @@
       dlBtn.style.fontSize = "12px";
       dlBtn.textContent = "Download PNG";
       dlBtn.addEventListener("click", () => downloadCanvas(canvas, filename));
+
+      const printBtn = document.createElement("button");
+      printBtn.className = "btn secondary";
+      printBtn.style.padding = "6px 12px";
+      printBtn.style.fontSize = "12px";
+      printBtn.textContent = "Print";
+      printBtn.addEventListener("click", () => printCanvases([canvas]));
+
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.gap = "8px";
+      actions.appendChild(dlBtn);
+      actions.appendChild(printBtn);
+
       head.appendChild(h3);
-      head.appendChild(dlBtn);
+      head.appendChild(actions);
 
       const canvasWrap = document.createElement("div");
       canvasWrap.className = "sheet-canvas-wrap";
@@ -761,10 +832,59 @@
     });
 
     downloadAllBtn.disabled = sheetsData.length === 0;
+    printAllBtn.disabled = sheetsData.length === 0;
   }
 
   function canvasToBlob(canvas) {
     return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+  }
+
+  function buildPrintDoc(canvases) {
+    const pages = canvases.map(c =>
+      `<div class="sheet"><img src="${c.toDataURL("image/png")}"></div>`
+    ).join("");
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+      @page { size: 4in 6in; margin: 0; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      .sheet { width: 4in; height: 6in; page-break-after: always; }
+      .sheet:last-child { page-break-after: auto; }
+      .sheet img { width: 100%; height: 100%; display: block; }
+    </style></head><body>${pages}</body></html>`;
+  }
+
+  function printCanvases(canvases) {
+    if (!canvases.length) return;
+    const html = buildPrintDoc(canvases);
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    };
+
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow.onafterprint = cleanup;
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (e) {
+        toast("Couldn't open the print dialog.");
+        cleanup();
+      }
+      setTimeout(cleanup, 60000);
+    };
+
+    iframe.srcdoc = html;
   }
 
   async function downloadCanvas(canvas, filename) {
@@ -797,6 +917,7 @@
 
   generateBtn.addEventListener("click", generateSheets);
   downloadAllBtn.addEventListener("click", downloadAll);
+  printAllBtn.addEventListener("click", () => printCanvases(sheetsData.map(s => s.canvas)));
 
   (async function initCapabilities() {
     try {
