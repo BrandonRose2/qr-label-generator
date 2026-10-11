@@ -424,14 +424,16 @@
 
           <div class="field-row">
             <div>
-              <label for="grid-rows">Grid rows</label>
-              <span class="hint">Columns fixed at 3</span>
+              <label for="grid-rows">Grid layout</label>
+              <span class="hint">Columns × rows per sheet</span>
             </div>
             <select id="grid-rows">
-              <option value="2">3 × 2 (6 per sheet)</option>
-              <option value="3" selected>3 × 3 (9 per sheet)</option>
-              <option value="4">3 × 4 (12 per sheet)</option>
-              <option value="5">3 × 5 (15 per sheet)</option>
+              <option value="2,2">2 × 2 (4 per sheet)</option>
+              <option value="2,3">2 × 3 (6 per sheet)</option>
+              <option value="3,2">3 × 2 (6 per sheet)</option>
+              <option value="3,3" selected>3 × 3 (9 per sheet)</option>
+              <option value="3,4">3 × 4 (12 per sheet)</option>
+              <option value="3,5">3 × 5 (15 per sheet)</option>
             </select>
           </div>
         </div>
@@ -475,7 +477,6 @@
   const DPI = 300;
   const SHEET_W = 4 * DPI;
   const SHEET_H = 6 * DPI;
-  const COLS = 3;
 
   /** @type {{id:number, dataUrl:string, img:HTMLImageElement, unit:string, filename:string}[]} */
   let items = [];
@@ -511,8 +512,14 @@
     return parts.length ? parts[parts.length - 1] : base;
   }
 
+  function gridDims() {
+    const [c, r] = gridRowsSelect.value.split(",").map(n => parseInt(n, 10));
+    return { cols: c, rows: r };
+  }
+
   function capacity() {
-    return COLS * parseInt(gridRowsSelect.value, 10);
+    const g = gridDims();
+    return g.cols * g.rows;
   }
 
   function updateCapacityNote() {
@@ -714,7 +721,8 @@
     } catch (e) { /* fall back to system fonts silently */ }
   }
 
-  function drawSheet(sheetItems, rows, headerText) {
+  function drawSheet(sheetItems, cols, rows, headerText) {
+    const COLS = cols;
     const canvas = document.createElement("canvas");
     canvas.width = SHEET_W;
     canvas.height = SHEET_H;
@@ -778,8 +786,8 @@
     if (!items.length) return;
     await ensureFonts();
 
-    const rows = parseInt(gridRowsSelect.value, 10);
-    const cap = COLS * rows;
+    const { cols, rows } = gridDims();
+    const cap = cols * rows;
     const headerText = propertyCodeInput.value.trim();
     const groups = chunk(items, cap);
 
@@ -787,7 +795,7 @@
     sheetsData = [];
 
     groups.forEach((group, idx) => {
-      const canvas = drawSheet(group, rows, headerText);
+      const canvas = drawSheet(group, cols, rows, headerText);
       const filename = `label-sheet-${String(idx + 1).padStart(2, "0")}.png`;
       sheetsData.push({ canvas, filename });
 
